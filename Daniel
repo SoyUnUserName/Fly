@@ -1,0 +1,173 @@
+local player = game.Players.LocalPlayer
+local UIS = game:GetService("UserInputService")
+local RS = game:GetService("RunService")
+local camera = workspace.CurrentCamera
+
+local flyEnabled = false
+local flySpeed = 100
+local toggleKey = Enum.KeyCode.R
+local flightConn
+
+local gui = Instance.new("ScreenGui")
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0,250,0,170)
+frame.Position = UDim2.new(0.5, -125, 0.5, -85)
+frame.BackgroundColor3 = Color3.new(0, 0, 0)
+frame.BorderSizePixel = 2
+frame.BorderColor3 = Color3.fromRGB(0, 255, 0)
+frame.Active = true
+frame.Parent = gui
+
+do
+	local dragging, startPos, startMouse
+	frame.InputBegan:Connect(function(inp)
+		if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+			startMouse = inp.Position
+			startPos = frame.Position
+			inp.Changed:Connect(function()
+				if inp.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end)
+	frame.InputChanged:Connect(function(inp)
+		if inp.UserInputType == Enum.UserInputType.MouseMovement and dragging then
+			local delta = inp.Position - startMouse
+			frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+		end
+	end)
+end
+
+local status = Instance.new("TextLabel", frame)
+status.Size = UDim2.new(0,230,0,30)
+status.Position = UDim2.new(0,10,0,10)
+status.BackgroundColor3 = Color3.new(0, 0, 0)
+status.BorderSizePixel = 0
+status.TextColor3 = Color3.fromRGB(0,255,0)
+status.Font = Enum.Font.GothamBold
+status.TextScaled = true
+status.Text = "Vuelo: OFF"
+
+local lblVel = Instance.new("TextLabel", frame)
+lblVel.Size = UDim2.new(0,230,0,20)
+lblVel.Position = UDim2.new(0,10,0,50)
+lblVel.BackgroundColor3 = Color3.new(0,0,0)
+lblVel.TextColor3 = Color3.fromRGB(0,255,0)
+lblVel.Font = Enum.Font.GothamBold
+lblVel.TextScaled = true
+lblVel.Text = "Velocidad:"
+
+local inVel = Instance.new("TextBox", frame)
+inVel.Size = UDim2.new(0,230,0,25)
+inVel.Position = UDim2.new(0,10,0,70)
+inVel.BackgroundColor3 = Color3.new(0,0,0)
+inVel.BorderColor3 = Color3.fromRGB(0,255,0)
+inVel.TextColor3 = Color3.fromRGB(0,255,0)
+inVel.Font = Enum.Font.GothamBold
+inVel.TextScaled = true
+inVel.ClearTextOnFocus = false
+inVel.Text = tostring(flySpeed)
+inVel.FocusLost:Connect(function()
+	local n = tonumber(inVel.Text)
+	if n and n > 0 then
+		flySpeed = math.floor(n)
+	else
+		inVel.Text = tostring(flySpeed)
+	end
+end)
+
+local lblKey = Instance.new("TextLabel", frame)
+lblKey.Size = UDim2.new(0,230,0,20)
+lblKey.Position = UDim2.new(0,10,0,105)
+lblKey.BackgroundColor3 = Color3.new(0,0,0)
+lblKey.TextColor3 = Color3.fromRGB(0,255,0)
+lblKey.Font = Enum.Font.GothamBold
+lblKey.TextScaled = true
+lblKey.Text = "Tecla Toggle:"
+
+local inKey = Instance.new("TextBox", frame)
+inKey.Size = UDim2.new(0,230,0,25)
+inKey.Position = UDim2.new(0,10,0,125)
+inKey.BackgroundColor3 = Color3.new(0,0,0)
+inKey.BorderColor3 = Color3.fromRGB(0,255,0)
+inKey.TextColor3 = Color3.fromRGB(0,255,0)
+inKey.Font = Enum.Font.GothamBold
+inKey.TextScaled = true
+inKey.ClearTextOnFocus = false
+inKey.Text = tostring(toggleKey):match("KeyCode%.(.+)")
+inKey.FocusLost:Connect(function()
+	local txt = inKey.Text:upper():gsub("%s+","")
+	if Enum.KeyCode[txt] then
+		toggleKey = Enum.KeyCode[txt]
+		inKey.Text = txt
+	else
+		inKey.Text = tostring(toggleKey):match("KeyCode%.(.+)")
+	end
+end)
+
+local function addPhysics(root)
+	local bg = Instance.new("BodyGyro", root)
+	bg.P = 3000
+	bg.D = 100
+	bg.MaxTorque = Vector3.new(1,1,1) * 9e6
+	local bv = Instance.new("BodyVelocity", root)
+	bv.MaxForce = Vector3.new(1,1,1) * 9e6
+	bv.Velocity = Vector3.new()
+	return bg, bv
+end
+
+local function startFlight()
+	local chr = player.Character or player.CharacterAdded:Wait()
+	local root = chr:WaitForChild("HumanoidRootPart")
+	chr:FindFirstChildOfClass("Humanoid").PlatformStand = true
+	local gyro, vel = addPhysics(root)
+	flightConn = RS.RenderStepped:Connect(function()
+		local dir = Vector3.new()
+		if UIS:IsKeyDown(Enum.KeyCode.W) then dir = dir + camera.CFrame.LookVector end
+		if UIS:IsKeyDown(Enum.KeyCode.S) then dir = dir - camera.CFrame.LookVector end
+		if UIS:IsKeyDown(Enum.KeyCode.A) then dir = dir - camera.CFrame.RightVector end
+		if UIS:IsKeyDown(Enum.KeyCode.D) then dir = dir + camera.CFrame.RightVector end
+		if UIS:IsKeyDown(Enum.KeyCode.E) then dir = dir + Vector3.new(0,1,0) end
+		if UIS:IsKeyDown(Enum.KeyCode.Q) then dir = dir + Vector3.new(0,-1,0) end
+		if dir.Magnitude > 0 then
+			vel.Velocity = dir.Unit * flySpeed
+		else
+			vel.Velocity = Vector3.new()
+		end
+		gyro.CFrame = camera.CFrame
+	end)
+	status.Text = "Vuelo: ON"
+end
+
+local function stopFlight()
+	local chr = player.Character
+	if chr then
+		chr:FindFirstChildOfClass("Humanoid").PlatformStand = false
+		local root = chr:FindFirstChild("HumanoidRootPart")
+		if root then
+			for _, c in ipairs(root:GetChildren()) do
+				if c:IsA("BodyGyro") or c:IsA("BodyVelocity") then
+					c:Destroy()
+				end
+			end
+		end
+	end
+	if flightConn then flightConn:Disconnect() end
+	status.Text = "Vuelo: OFF"
+end
+
+UIS.InputBegan:Connect(function(inp, gp)
+	if not gp and inp.KeyCode == toggleKey then
+		flyEnabled = not flyEnabled
+		if flyEnabled then
+			startFlight()
+		else
+			stopFlight()
+		end
+	end
+end)
